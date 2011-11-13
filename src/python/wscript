@@ -1,0 +1,10 @@
+def options(context):
+    context.load("python")
+
+def configure(context):
+    context.load("python")
+    context.check_python_version((2, 6))
+
+def build(context):
+    context.recurse("condor")
+
