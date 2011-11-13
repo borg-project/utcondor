@@ -1,5 +1,7 @@
 """@author: Bryan Silverthorn <bcs@cargo-cult.org>"""
 
+# XXX still completely insecure
+
 from __future__ import absolute_import
 
 import os
@@ -14,9 +16,9 @@ import collections
 import multiprocessing
 import cPickle as pickle
 import numpy
-import cargo
+import condor
 
-logger = cargo.get_logger(__name__, level = "INFO")
+logger = condor.get_logger(__name__, level = "INFO")
 
 _current_task = None
 
@@ -320,7 +322,7 @@ class RemoteManager(object):
         logger.debug("listening on port %i", rep_port)
 
         # launch condor jobs
-        cluster = cargo.submit_condor_workers(workers, "tcp://%s:%i" % (socket.getfqdn(), rep_port))
+        cluster = condor.submit_condor_workers(workers, "tcp://%s:%i" % (socket.getfqdn(), rep_port))
 
         try:
             try:
@@ -330,7 +332,7 @@ class RemoteManager(object):
                 raise
         finally:
             # clean up condor jobs
-            cargo.condor_rm(cluster)
+            condor.condor_rm(cluster)
 
             logger.info("removed condor jobs")
 
