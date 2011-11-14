@@ -15,7 +15,6 @@ import traceback
 import collections
 import multiprocessing
 import cPickle as pickle
-import numpy
 import condor
 
 logger = condor.get_logger(__name__, level = "INFO")
@@ -383,13 +382,6 @@ class LocalWorkerProcess(multiprocessing.Process):
 
                 # complete the assignment
                 try:
-                    seed = abs(hash(task.key))
-
-                    logger.info("setting PRNG seed to %s", seed)
-
-                    numpy.random.seed(seed)
-                    random.seed(numpy.random.randint(2**32))
-
                     logger.info("starting work on task %s", task.key)
 
                     result = task()

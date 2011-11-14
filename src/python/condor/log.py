@@ -1,3 +1,4 @@
+import sys
 import logging
 
 class TTY_Formatter(logging.Formatter):
@@ -72,4 +73,19 @@ def get_logger(name = None, level = None, default_level = logging.INFO):
         logger.is_squeaky_clean = False
 
     return logger
+
+def enable_default_logging():
+    """Set up logging in the typical way."""
+
+    get_logger(level = "INFO")
+
+    # build a handler
+    handler = logging.StreamHandler(sys.stdout)
+
+    handler.setFormatter(TTY_Formatter(sys.stdout))
+
+    # add it
+    logging.root.addHandler(handler)
+
+    return handler
 

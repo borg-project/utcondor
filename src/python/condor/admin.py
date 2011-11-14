@@ -5,11 +5,60 @@ import os
 import os.path
 import sys
 import datetime
-import subprocess
-import cargo
 import cStringIO as StringIO
+import subprocess
+import condor
 
-logger = cargo.get_logger(__name__, level = "INFO")
+logger = condor.get_logger(__name__, level = "INFO")
+
+def call_capturing(arguments, input = None, preexec_fn = None):
+    """Spawn a process and return its output and status code."""
+
+    popened = None
+
+    try:
+        # launch the subprocess
+        popened = \
+            subprocess.Popen(
+                arguments,
+                stdin      = subprocess.PIPE,
+                stdout     = subprocess.PIPE,
+                stderr     = subprocess.PIPE,
+                preexec_fn = preexec_fn,
+                )
+
+        # wait for its natural death
+        (stdout, stderr) = popened.communicate(input)
+    except:
+        #raised = Raised()
+
+        if popened is not None and popened.poll() is None:
+            #try:
+            popened.kill()
+            popened.wait()
+            #except:
+                #Raised().print_ignored()
+
+        #raised.re_raise()
+    else:
+        return (stdout, stderr, popened.returncode)
+
+def check_call_capturing(arguments, input = None, preexec_fn = None):
+    """Spawn a process and return its output."""
+
+    (stdout, stderr, code) = call_capturing(arguments, input, preexec_fn)
+
+    if code == 0:
+        return (stdout, stderr)
+    else:
+        from subprocess import CalledProcessError
+
+        error = CalledProcessError(code, arguments)
+
+        error.stdout = stdout
+        error.stderr = stderr
+
+        raise error
 
 class CondorSubmission(object):
     """Stream output to a Condor submission file."""
@@ -100,7 +149,7 @@ class CondorSubmission(object):
 def condor_submit(submit_path):
     """Submit to condor; return the cluster number."""
 
-    (stdout, stderr) = cargo.check_call_capturing(["/usr/bin/env", "condor_submit", submit_path])
+    (stdout, stderr) = condor.check_call_capturing(["/usr/bin/env", "condor_submit", submit_path])
     expression = r"(\d+) job\(s\) submitted to cluster (\d+)\."
     match = re.match(expression , stdout.splitlines()[-1])
 
@@ -119,7 +168,7 @@ def condor_rm(specifier):
     logger.info("killing condor jobs matched by %s", specifier)
 
     try:
-        cargo.check_call_capturing(["condor_rm", str(specifier)])
+        check_call_capturing(["condor_rm", str(specifier)])
     except subprocess.CalledProcessError:
         return False
     else:
@@ -131,7 +180,7 @@ def condor_hold(specifiers):
     logger.info("holding condor job(s) matched by %s", specifiers)
 
     try:
-        cargo.check_call_capturing(["condor_hold"] + map(str, specifiers))
+        check_call_capturing(["condor_hold"] + map(str, specifiers))
     except subprocess.CalledProcessError:
         return False
     else:
@@ -143,7 +192,7 @@ def condor_release(specifiers):
     logger.info("releasing condor job(s) matched by %s", specifiers)
 
     try:
-        cargo.check_call_capturing(["condor_release"] + map(str, specifiers))
+        check_call_capturing(["condor_release"] + map(str, specifiers))
     except subprocess.CalledProcessError:
         return False
     else:
@@ -155,7 +204,7 @@ def default_condor_home():
 def submit_condor_workers(
     workers,
     req_address,
-    matching = cargo.defaults.condor_matching,
+    matching = "InMastodon && (Arch == \"X86_64\") && (OpSys == \"LINUX\") && (Memory > 1024)",
     description = "distributed Python worker process(es)",
     group = "GRAD",
     project = "AI_ROBOTICS",
@@ -220,7 +269,7 @@ def submit_condor_workers(
         .blank()
 
     for working_path in working_paths:
-        arg_format = '"-c \'%s ""$0"" $@\' -m cargo.tools.labor.work2 %s $(Cluster).$(Process)"'
+        arg_format = '"-c \'%s ""$0"" $@\' -m condor.work %s $(Cluster).$(Process)"'
 
         submit \
             .pairs(
@@ -236,5 +285,5 @@ def submit_condor_workers(
     with open(submit_path, "w") as submit_file:
         submit_file.write(submit.contents)
 
-    return cargo.condor_submit(submit_path)
+    return condor_submit(submit_path)
 

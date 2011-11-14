@@ -1,10 +1,10 @@
 """@author: Bryan Silverthorn <bcs@cargo-cult.org>"""
 
 import plac
-import condor.labor
+import condor.work
 
 if __name__ == "__main__":
-    plac.call(condor.labor.main)
+    plac.call(condor.work.main)
 
 import traceback
 import zmq
@@ -91,7 +91,7 @@ def work_loop(condor_id, req_socket):
 def main(req_address, condor_id):
     """Do arbitrary distributed work."""
 
-    cargo.enable_default_logging()
+    condor.enable_default_logging()
 
     # connect to the work server
     logger.info("connecting to %s", req_address)

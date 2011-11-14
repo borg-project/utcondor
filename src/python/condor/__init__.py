@@ -1,9 +1,10 @@
-from . import labor
-from . import condor
-from . import work
-from . import log
-
-from .condor import *
-from .labor import *
 from .log import *
+
+from . import log
+from . import labor
+from . import admin
+from . import work
+
+from .admin import *
+from .labor import *
 

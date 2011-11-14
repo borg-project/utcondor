@@ -4,6 +4,8 @@ def options(context):
 def configure(context):
     context.load("python")
     context.check_python_version((2, 6))
+    context.check_python_module("plac")
+    context.check_python_module("zmq")
 
 def build(context):
     context.recurse("condor")
