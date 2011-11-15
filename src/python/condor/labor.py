@@ -460,7 +460,7 @@ class LocalManager(object):
 
             logger.info("cleaned up child processes")
 
-def do_or_distribute(requests, workers, handler = lambda _, x: x, local = False):
+def do(requests, workers, handler = lambda _, x: x, local = False):
     """Distribute or compute locally."""
 
     tasks = map(Task.from_request, requests)
@@ -476,4 +476,6 @@ def do_or_distribute(requests, workers, handler = lambda _, x: x, local = False)
             result = task()
 
             handler(task, result)
+
+do_or_distribute = do
 
