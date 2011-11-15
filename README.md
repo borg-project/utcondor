@@ -1,12 +1,24 @@
 utcondor
 ========
 
-The utcondor library provides Python tools for distributed computing on the [Condor](http://www.cs.wisc.edu/condor/) platform at [UTCS](http://www.cs.utexas.edu/). These tools probably won't be useful to you unless you're a computer science graduate student at the University of Texas at Austin.
+The utcondor library provides Python tools for distributed computing on the
+[Condor](http://www.cs.wisc.edu/condor/) platform at
+[UTCS](http://www.cs.utexas.edu/). These tools probably won't be useful to you
+unless you're a computer science graduate student at the University of Texas at
+Austin.
+
+Its goal is to reliably implement a simple distributed computing model that
+requires as little boilerplate as possible, and no effort to switch between
+local and remote execution.
 
 Overview
 --------
 
-Many simple distributed computing tasks can be modeled as a one-level parallel map: some function is executed over some set of inputs, and each result is handled as it becomes available. The utcondor library implements this model, which is primitive, but often good enough. For example, to square a range of numbers in distributed fashion:
+Many distributed computing tasks can be modeled as a one-level parallel map:
+some function is executed over some set of inputs, and each result is handled
+as it becomes available. The utcondor library implements this model, which is
+primitive, but often good enough. For example, to square a range of numbers in
+distributed fashion:
 
 ```python
 import condor
@@ -30,7 +42,8 @@ def main():
 Installation
 ------------
 
-Install the two dependencies; `pyzmq-static` is probably the easiest way to install the Python bindings to [ØMQ](http://www.zeromq.org/):
+Install the two dependencies; `pyzmq-static` is probably the easiest way to
+install the Python bindings to [ØMQ](http://www.zeromq.org/):
 
 ```sh
 $ pip install plac
@@ -56,3 +69,4 @@ License
 
 This software package is provided under the non-copyleft open-source "MIT"
 license. The complete legal notice can be found in the included LICENSE file.
+
