@@ -89,3 +89,9 @@ def enable_default_logging():
 
     return handler
 
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
+get_logger("condor").addHandler(NullHandler())
+
