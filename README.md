@@ -7,18 +7,17 @@ The utcondor library provides Python tools for distributed computing on the
 unless you're a computer science graduate student at the University of Texas at
 Austin.
 
-Its goal is to reliably implement a simple distributed computing model that
-requires as little boilerplate as possible, and no effort to switch between
+The goal of utcondor is a reliable implementation of a simple distributed
+computing model. It requires little boilerplate, and switches easily between
 local and remote execution.
 
 Overview
 --------
 
-Many distributed computing tasks can be modeled as a one-level parallel map:
-some function is executed over some set of inputs, and each result is handled
-as it becomes available. The utcondor library implements this model, which is
-primitive, but often good enough. For example, to square a range of numbers in
-distributed fashion:
+The utcondor library supports distributed computing tasks that can be cast as a
+one-level parallel map: a function executed over multiple inputs on multiple
+machines. This model is primitive, but easy to apply and often good enough. For
+a trivial example, to square a range of numbers in distributed fashion:
 
 ```python
 import condor
@@ -33,11 +32,13 @@ def square(x):
 def main():
     jobs = [(square, [x]) for x in range(16)]
 
-    def handle_result(task, xx):
-        print task.args, xx
+    def receive(task, result):
+        print task.args, result
 
-    condor.do_or_distribute(jobs, 4, handle_result)
+    condor.do(jobs, 4, receive)
 ```
+
+Any arguments passed to the remotely-executed callable must be pickleable.
 
 Installation
 ------------
@@ -56,13 +57,20 @@ Then use waf to install utcondor into your local Python installation:
 $ ./waf configure
 $ ./waf install
 ```
-    
-You're running inside a [virtualenv](http://pypi.python.org/pypi/virtualenv), right?
+
+You're running inside a [virtualenv](http://pypi.python.org/pypi/virtualenv),
+right?
 
 Caveat Emptor
 -------------
 
-Be careful. Pay attention to whether Condor jobs are being successfully cleaned up. Use at your own risk.
+Be careful. Pay attention to whether Condor jobs are being successfully cleaned
+up. Use at your own risk.
+
+Credits
+-------
+
+The primary author is Bryan Silverthorn <bcs@cargo-cult.org>.
 
 License
 -------
