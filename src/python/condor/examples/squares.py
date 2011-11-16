@@ -6,13 +6,11 @@ def square(x):
 def main():
     jobs = [(square, [x]) for x in range(16)]
 
-    def finished(task, result):
+    def done(task, result):
         print task.args, result
 
-    condor.do(jobs, 4, finished)
+    condor.do(jobs, 4, done)
 
 if __name__ == "__main__":
-    condor.enable_default_logging() # XXX
-
     main()
 
