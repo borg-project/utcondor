@@ -22,16 +22,14 @@ a trivial example, to square a range of numbers in distributed fashion:
 ```python
 import condor
 
-def square(x):
+def f(x):
     return x**2
 
 def main():
-    jobs = [(square, [x]) for x in range(16)]
-
     def done(task, result):
         print task.args, result
 
-    condor.do(jobs, 4, done)
+    condor.do([(f, [x]) for x in range(16)], 4, done)
 
 if __name__ == "__main__":
     main()
