@@ -21,10 +21,6 @@ a trivial example, to square a range of numbers in distributed fashion:
 
 ```python
 import condor
-import this_module
-
-if __name__ == "__main__":
-    this_module.main()
 
 def square(x):
     return x**2
@@ -32,10 +28,13 @@ def square(x):
 def main():
     jobs = [(square, [x]) for x in range(16)]
 
-    def receive(task, result):
+    def done(task, result):
         print task.args, result
 
-    condor.do(jobs, 4, receive)
+    condor.do(jobs, 4, done)
+
+if __name__ == "__main__":
+    main()
 ```
 
 Any arguments passed to the remotely-executed callable must be pickleable.
