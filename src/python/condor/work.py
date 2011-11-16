@@ -1,11 +1,8 @@
 """@author: Bryan Silverthorn <bcs@cargo-cult.org>"""
 
 import plac
-import condor.work
-
-if __name__ == "__main__":
-    plac.call(condor.work.main)
-
+import sys
+import imp
 import traceback
 import zmq
 import condor
@@ -87,11 +84,17 @@ def work_loop(condor_id, req_socket):
 @plac.annotations(
     req_address = ("zeromq address of master"),
     condor_id = ("condor process specifier"),
+    main_path = ("path to module that replaces __main__"),
     )
-def main(req_address, condor_id):
+def main(req_address, condor_id, main_path = None):
     """Do arbitrary distributed work."""
 
     condor.enable_default_logging()
+
+    # replace the __main__ module, if necessary
+    if main_path is not None:
+        sys.modules["__old_main__"] = sys.modules["__main__"]
+        sys.modules["__main__"] = imp.load_source("__new_main__", main_path)
 
     # connect to the work server
     logger.info("connecting to %s", req_address)
@@ -106,10 +109,13 @@ def main(req_address, condor_id):
     try:
         work_loop(condor_id, req_socket)
     finally:
-        logger.info("flushing sockets and terminating zeromq context")
+        logger.debug("flushing sockets and terminating zeromq context")
 
         req_socket.close()
         context.term()
 
-        logger.info("zeromq cleanup complete")
+        logger.debug("zeromq cleanup complete")
+
+if __name__ == "__main__":
+    plac.call(main)
 

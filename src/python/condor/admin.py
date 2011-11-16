@@ -4,6 +4,7 @@ import re
 import os
 import os.path
 import sys
+import pipes
 import datetime
 import cStringIO as StringIO
 import subprocess
@@ -256,7 +257,6 @@ def submit_condor_workers(
             ) \
         .blank() \
         .environment(
-            CARGO_LOG_FILE_PREFIX = "log",
             PATH = os.environ.get("PATH", ""),
             PYTHONPATH = os.environ.get("PYTHONPATH", ""),
             LD_LIBRARY_PATH = os.environ.get("LD_LIBRARY_PATH", ""),
@@ -269,12 +269,13 @@ def submit_condor_workers(
         .blank()
 
     for working_path in working_paths:
-        arg_format = '"-c \'%s ""$0"" $@\' -m condor.work %s $(Cluster).$(Process)"'
+        arg_format = '"-c \'%s ""$0"" $@\' -m condor.work %s $(Cluster).$(Process) %s"'
+        main_path = sys.modules["__main__"].__file__
 
         submit \
             .pairs(
                 Initialdir = working_path,
-                Arguments = arg_format % (sys.executable, req_address),
+                Arguments = arg_format % (sys.executable, req_address, pipes.quote(main_path)),
                 ) \
             .queue(1) \
             .blank()

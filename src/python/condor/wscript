@@ -10,3 +10,5 @@ def build(context):
         install_path = "${PYTHONDIR}/condor",
         )
 
+    context.recurse("examples")
+

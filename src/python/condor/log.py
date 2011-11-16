@@ -77,7 +77,7 @@ def get_logger(name = None, level = None, default_level = logging.INFO):
 def enable_default_logging():
     """Set up logging in the typical way."""
 
-    get_logger(level = "INFO")
+    get_logger(level = "NOTSET")
 
     # build a handler
     handler = logging.StreamHandler(sys.stdout)

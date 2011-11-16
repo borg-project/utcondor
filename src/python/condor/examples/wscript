@@ -1,0 +1,9 @@
+def build(context):
+    context(
+        source = [
+            "__init__.py",
+            "squares.py",
+            ],
+        install_path = "${PYTHONDIR}/condor/examples",
+        )
+
