@@ -2,6 +2,7 @@ def build(context):
     context(
         source = [
             "__init__.py",
+            "defaults.py",
             "admin.py",
             "labor.py",
             "work.py",

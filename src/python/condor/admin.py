@@ -205,7 +205,7 @@ def default_condor_home():
 def submit_condor_workers(
     workers,
     req_address,
-    matching = "InMastodon && (Arch == \"X86_64\") && (OpSys == \"LINUX\") && (Memory > 1024)",
+    matching = condor.defaults.condor_matching,
     description = "distributed Python worker process(es)",
     group = "GRAD",
     project = "AI_ROBOTICS",
