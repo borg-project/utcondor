@@ -1,6 +1,11 @@
 """@author: Bryan Silverthorn <bcs@cargo-cult.org>"""
 
 import plac
+import condor.work
+
+if __name__ == "__main__":
+    plac.call(condor.work.main)
+
 import sys
 import imp
 import traceback
@@ -115,7 +120,4 @@ def main(req_address, condor_id, main_path = None):
         context.term()
 
         logger.debug("zeromq cleanup complete")
-
-if __name__ == "__main__":
-    plac.call(main)
 
