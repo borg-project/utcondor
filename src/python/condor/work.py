@@ -19,12 +19,12 @@ def work_once(condor_id, req_socket, task):
 
     # get an assignment
     if task is None:
-        condor.send_pyobj_gz(
+        condor.send_pyobj_compressed(
             req_socket,
             condor.labor.ApplyMessage(condor_id),
             )
 
-        task = condor.recv_pyobj_gz(req_socket)
+        task = condor.recv_pyobj_compressed(req_socket)
 
         if task is None:
             logger.info("received null assignment; terminating")
@@ -41,7 +41,7 @@ def work_once(condor_id, req_socket, task):
     except KeyboardInterrupt, error:
         logger.warning("interruption during task %s", task.key)
 
-        condor.send_pyobj_gz(
+        condor.send_pyobj_compressed(
             req_socket,
             condor.labor.InterruptedMessage(condor_id, task.key),
             )
@@ -52,7 +52,7 @@ def work_once(condor_id, req_socket, task):
 
         logger.warning("error during task %s:\n%s", task.key, description)
 
-        condor.send_pyobj_gz(
+        condor.send_pyobj_compressed(
             req_socket,
             condor.labor.ErrorMessage(condor_id, task.key, description),
             )
@@ -61,12 +61,12 @@ def work_once(condor_id, req_socket, task):
     else:
         logger.info("finished task %s", task.key)
 
-        condor.send_pyobj_gz(
+        condor.send_pyobj_compressed(
             req_socket,
             condor.labor.DoneMessage(condor_id, task.key, result),
             )
 
-        return condor.recv_pyobj_gz(req_socket)
+        return condor.recv_pyobj_compressed(req_socket)
 
     condor.labor._current_task = None
 

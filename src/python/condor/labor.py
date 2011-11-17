@@ -7,7 +7,6 @@ from __future__ import absolute_import
 import os
 import sys
 import time
-import zlib
 import socket
 import signal
 import random
@@ -17,7 +16,7 @@ import multiprocessing
 import cPickle as pickle
 import condor
 
-logger = condor.get_logger(__name__, level = "INFO")
+logger = condor.get_logger(__name__)
 
 _current_task = None
 
@@ -26,15 +25,33 @@ def get_task():
 
     return _current_task
 
-def send_pyobj_gz(zmq_socket, message):
+try:
+    import snappy
+except ImportError:
+    import zlib
+
+    logger.debug("using zlib for compression")
+
+    def compress(data):
+        return zlib.compress(data, 1)
+
+    def decompress(data):
+        return zlib.decompress(data)
+else:
+    logger.debug("using snappy for compression")
+
+    compress = snappy.compress
+    decompress = snappy.decompress
+
+def send_pyobj_compressed(zmq_socket, message):
     pickled = pickle.dumps(message)
-    compressed = zlib.compress(pickled, 1)
+    compressed = compress(pickled)
 
     zmq_socket.send(compressed)
 
-def recv_pyobj_gz(zmq_socket):
+def recv_pyobj_compressed(zmq_socket):
     compressed = zmq_socket.recv()
-    decompressed = zlib.decompress(compressed)
+    decompressed = decompress(compressed)
     unpickled = pickle.loads(decompressed)
 
     return unpickled
@@ -296,11 +313,11 @@ class RemoteManager(object):
 
             assert events.get(self.rep_socket) == zmq.POLLIN
 
-            message = recv_pyobj_gz(self.rep_socket)
+            message = recv_pyobj_compressed(self.rep_socket)
 
             (response, completed) = self.core.handle(message)
 
-            send_pyobj_gz(self.rep_socket, response)
+            send_pyobj_compressed(self.rep_socket, response)
 
             if completed is not None:
                 self.handler(*completed)
