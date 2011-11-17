@@ -205,12 +205,16 @@ def default_condor_home():
 def submit_condor_workers(
     workers,
     req_address,
-    matching = condor.defaults.condor_matching,
+    matching = None,
     description = "distributed Python worker process(es)",
     group = "GRAD",
     project = "AI_ROBOTICS",
     condor_home = default_condor_home(),
     ):
+    # defaults
+    if matching is None:
+        matching = condor.defaults.condor_matching
+
     # prepare the working directories
     working_paths = [os.path.join(condor_home, "%i" % i) for i in xrange(workers)]
 
