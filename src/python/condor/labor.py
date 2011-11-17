@@ -41,7 +41,7 @@ else:
     decompress = snappy.decompress
 
 def send_pyobj_compressed(zmq_socket, message):
-    pickled = pickle.dumps(message)
+    pickled = pickle.dumps(message, protocol = -1)
     compressed = compress(pickled)
 
     zmq_socket.send(compressed)
@@ -49,7 +49,7 @@ def send_pyobj_compressed(zmq_socket, message):
 def recv_pyobj_compressed(zmq_socket):
     compressed = zmq_socket.recv()
     decompressed = decompress(compressed)
-    unpickled = pickle.loads(decompressed)
+    unpickled = pickle.loads(decompressed, protocol = -1)
 
     return unpickled
 
