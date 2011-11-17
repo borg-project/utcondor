@@ -32,11 +32,8 @@ except ImportError:
 
     logger.debug("using zlib for compression")
 
-    def compress(data):
-        return zlib.compress(data, 1)
-
-    def decompress(data):
-        return zlib.decompress(data)
+    compress = lambda data: zlib.compress(data, 1)
+    decompress = zlib.decompress
 else:
     logger.debug("using snappy for compression")
 
