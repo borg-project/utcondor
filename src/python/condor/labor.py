@@ -49,7 +49,7 @@ def send_pyobj_compressed(zmq_socket, message):
 def recv_pyobj_compressed(zmq_socket):
     compressed = zmq_socket.recv()
     decompressed = decompress(compressed)
-    unpickled = pickle.loads(decompressed, protocol = -1)
+    unpickled = pickle.loads(decompressed)
 
     return unpickled
 
