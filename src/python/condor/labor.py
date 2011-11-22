@@ -522,7 +522,7 @@ class SerialManager(object):
     def clean(self):
         pass
 
-def do(requests, workers, handler = lambda _, x: x, local = False):
+def do(requests, workers, local = False, handler = lambda _, x: x):
     """Distribute or compute locally."""
 
     tasks = sorted(map(Task.from_request, requests), key = lambda _: random.random())
