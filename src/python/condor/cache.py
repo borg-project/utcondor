@@ -7,7 +7,7 @@ import condor
 class DiskCache(object):
     """Use the filesystem as the key-value store that it is."""
 
-    def __init__(self, root, threshold = 1):
+    def __init__(self, root, threshold = 1024):
         self._root = os.path.abspath(root)
         self._threshold = threshold
         self._small = {}
