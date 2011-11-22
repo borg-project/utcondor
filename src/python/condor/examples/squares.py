@@ -4,10 +4,10 @@ def f(x):
     return x**2
 
 def main():
-    def done(task, result):
-        print task.args, result
+    call = [(f, [x]) for x in range(16)]
 
-    condor.do([(f, [x]) for x in range(16)], 4, done)
+    for (calls, result) in condor.do(calls, 4):
+        print call.args, result
 
 if __name__ == "__main__":
     main()

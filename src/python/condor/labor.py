@@ -5,6 +5,7 @@
 from __future__ import absolute_import
 
 import os
+import os.path
 import sys
 import time
 import socket
@@ -34,11 +35,13 @@ except ImportError:
 
     compress = lambda data: zlib.compress(data, 1)
     decompress = zlib.decompress
+    compression_extension = "gz"
 else:
     logger.debug("using snappy for compression")
 
     compress = snappy.compress
     decompress = snappy.decompress
+    compression_extension = "snappy"
 
 def send_pyobj_compressed(zmq_socket, message):
     pickled = pickle.dumps(message, protocol = -1)
@@ -107,14 +110,45 @@ class DoneMessage(Message):
     def get_summary(self):
         return self.make_summary("finished job {0}".format(self.key))
 
+class TaskMessage(Message):
+    """A task, with arguments stored appropriately."""
+
+    def __init__(self, sender, task, cache = None):
+        Message.__init__(self, sender)
+
+        if cache is None:
+            cache = {}
+
+        self._call = task.call
+        self._arg_ids = map(id, task.args)
+        self._kwarg_ids = dict((k, id(v)) for (k, v) in task.kwargs.items())
+        self._key = task.key
+        self._cache = cache
+
+        for arg in task.args:
+            self._cache[id(arg)] = arg
+
+        for kwarg in task.kwargs.values():
+            self._cache[id(kwarg)] = kwarg
+
+    def get_task(self):
+        args = map(self._cache.__getitem__, self._arg_ids)
+        kwargs = dict((k, self._cache[v]) for (k, v) in self._kwarg_ids.items())
+
+        return Task(self._call, args, kwargs, self._key)
+
 class Task(object):
     """One unit of distributable work."""
 
-    def __init__(self, call, args = [], kwargs = {}):
+    def __init__(self, call, args = [], kwargs = {}, key = None):
         self.call = call
         self.args = args
         self.kwargs = kwargs
-        self.key = id(self)
+
+        if key is None:
+            self.key = id(self)
+        else:
+            self.key = key
 
     def __hash__(self):
         return hash(self.key)
@@ -129,7 +163,7 @@ class Task(object):
         if isinstance(request, Task):
             return request
         elif isinstance(request, collections.Mapping):
-            return Task(**mapping)
+            return Task(**request)
         else:
             return Task(*request)
 
@@ -204,10 +238,10 @@ class WorkerState(object):
 class ManagerCore(object):
     """Maintain the task queue and worker assignments."""
 
-    def __init__(self, task_list):
+    def __init__(self, tasks):
         """Initialize."""
 
-        self.tstates = dict((t.key, TaskState(t)) for t in task_list)
+        self.tstates = dict((t.key, TaskState(t)) for t in tasks)
         self.wstates = {}
 
     def handle(self, message):
@@ -286,74 +320,82 @@ class ManagerCore(object):
 
         return sum(1 for t in self.tstates.itervalues() if not t.done)
 
-class RemoteManager(object):
+class DistributedManager(object):
     """Manage remotely-distributed work."""
 
-    def __init__(self, task_list, handler, rep_socket):
+    def __init__(self, tasks, workers):
         """Initialize."""
 
-        self.handler = handler
-        self.rep_socket = rep_socket
-        self.core = ManagerCore(task_list)
+        self._core = ManagerCore(tasks)
+
+        # set up zeromq
+        import zmq
+
+        self._context = zmq.Context()
+        self._rep_socket = self._context.socket(zmq.REP)
+
+        rep_port = self._rep_socket.bind_to_random_port("tcp://*")
+
+        logger.debug("communicating on port %i", rep_port)
+
+        # launch condor jobs
+        logger.info("distributing %i tasks to %i workers", len(tasks), workers)
+
+        (root_path, self._cluster) = \
+            condor.submit_condor_workers(
+                workers,
+                "tcp://{0}:{1}".format(socket.getfqdn(), rep_port),
+                )
+
+        self._cache = condor.cache.DiskCache(os.path.join(root_path, "cache"))
 
     def manage(self):
         """Manage workers and tasks."""
 
         import zmq
 
-        poller = zmq.Poller()
-
-        poller.register(self.rep_socket, zmq.POLLIN)
-
-        while self.core.unfinished_count() > 0:
-            events = dict(poller.poll())
-
-            assert events.get(self.rep_socket) == zmq.POLLIN
-
-            message = recv_pyobj_compressed(self.rep_socket)
-
-            (response, completed) = self.core.handle(message)
-
-            send_pyobj_compressed(self.rep_socket, response)
-
-            if completed is not None:
-                self.handler(*completed)
-
-    @staticmethod
-    def distribute(tasks, workers = 8, handler = lambda _, x: x):
-        """Distribute computation to remote workers."""
-
-        import zmq
-
-        logger.info("distributing %i tasks to %i workers", len(tasks), workers)
-
-        # prepare zeromq
-        context = zmq.Context()
-        rep_socket = context.socket(zmq.REP)
-        rep_port = rep_socket.bind_to_random_port("tcp://*")
-
-        logger.debug("listening on port %i", rep_port)
-
-        # launch condor jobs
-        cluster = condor.submit_condor_workers(workers, "tcp://%s:%i" % (socket.getfqdn(), rep_port))
-
         try:
-            try:
-                return RemoteManager(tasks, handler, rep_socket).manage()
-            except KeyboardInterrupt:
-                # work around bizarre pyzmq SIGINT behavior
-                raise
-        finally:
-            # clean up condor jobs
-            condor.condor_rm(cluster)
+            poller = zmq.Poller()
 
-            logger.info("removed condor jobs")
+            poller.register(self._rep_socket, zmq.POLLIN)
 
-            # clean up zeromq
-            rep_socket.close()
-            context.term()
+            while self._core.unfinished_count() > 0:
+                events = dict(poller.poll())
 
-            logger.info("terminated zeromq context")
+                assert events.get(self._rep_socket) == zmq.POLLIN
+
+                message = recv_pyobj_compressed(self._rep_socket)
+
+                (next_task, completed) = self._core.handle(message)
+
+                if next_task is None:
+                    reply_message = None
+                else:
+                    reply_message = TaskMessage(None, next_task, self._cache.fork())
+
+                send_pyobj_compressed(self._rep_socket, reply_message)
+
+                if completed is not None:
+                    yield completed
+        except KeyboardInterrupt:
+            # work around bizarre pyzmq SIGINT behavior
+            raise
+
+    def clean(self):
+        """Clean up manager state."""
+
+        condor.condor_rm(self._cluster)
+
+        logger.info("removed condor jobs")
+
+        self._rep_socket.close()
+        self._context.term()
+
+        logger.info("terminated zeromq context")
+
+        self._cache.delete()
+
+        logger.info("removed argument cache")
 
 class LocalWorkerProcess(multiprocessing.Process):
     """Work in a subprocess."""
@@ -428,68 +470,76 @@ class LocalWorkerProcess(multiprocessing.Process):
         except DeathRequestedError:
             pass
 
-class LocalManager(object):
+class ParallelManager(object):
     """Manage locally-distributed work."""
 
-    def __init__(self, stm_queue, task_list, processes, handler):
+    def __init__(self, tasks, workers):
         """Initialize."""
 
-        self.stm_queue = stm_queue
-        self.core = ManagerCore(task_list)
-        self.processes = processes
-        self.handler = handler
+        self._core = ManagerCore(tasks)
+
+        logger.info("distributing %i tasks to %i workers", len(tasks), workers)
+
+        self._stm_queue = multiprocessing.Queue()
+        self._processes = [LocalWorkerProcess(self._stm_queue) for _ in xrange(workers)]
+
+        for process in self._processes:
+            process.start()
 
     def manage(self):
         """Manage workers and tasks."""
 
-        process_index = dict((process.pid, process) for process in self.processes)
+        process_index = dict((process.pid, process) for process in self._processes)
 
-        while self.core.unfinished_count() > 0:
-            message = self.stm_queue.get()
+        while self._core.unfinished_count() > 0:
+            message = self._stm_queue.get()
 
-            (response, completed) = self.core.handle(message)
+            (response, completed) = self._core.handle(message)
 
             process_index[message.sender].mts_queue.put(response)
 
             if completed is not None:
-                self.handler(*completed)
+                yield completed
 
-    @staticmethod
-    def distribute(tasks, workers = 8, handler = lambda _, x: x):
-        """Distribute computation to remote workers."""
+    def clean(self):
+        for process in self._processes:
+            os.kill(process.pid, signal.SIGUSR1)
 
-        logger.info("distributing %i tasks to %i workers", len(tasks), workers)
+class SerialManager(object):
+    """Manage in-process work."""
 
-        stm_queue = multiprocessing.Queue()
-        processes = [LocalWorkerProcess(stm_queue) for _ in xrange(workers)]
+    def __init__(self, tasks):
+        self._tasks = tasks
 
-        for process in processes:
-            process.start()
+    def manage(self):
+        """Complete tasks."""
 
-        try:
-            return LocalManager(stm_queue, tasks, processes, handler).manage()
-        finally:
-            for process in processes:
-                os.kill(process.pid, signal.SIGUSR1)
+        while self._tasks:
+            task = self._tasks.pop()
 
-            logger.info("cleaned up child processes")
+            yield (task, task())
+
+    def clean(self):
+        pass
 
 def do(requests, workers, handler = lambda _, x: x, local = False):
     """Distribute or compute locally."""
 
-    tasks = map(Task.from_request, requests)
+    tasks = sorted(map(Task.from_request, requests), key = lambda _: random.random())
 
     if workers > 0:
         if local:
-            return LocalManager.distribute(tasks, workers, handler)
+            manager = ParallelManager(tasks, workers)
         else:
-            return RemoteManager.distribute(tasks, workers, handler)
+            manager = DistributedManager(tasks, workers)
     else:
-        while tasks:
-            task = tasks.pop()
-            result = task()
+        manager = SerialManager(tasks)
 
-            handler(task, result)
+    try:
+        for (task, result) in manager.manage():
+            yield (task, handler(task, result))
+    finally:
+        manager.clean()
 
 do_or_distribute = do
 

@@ -290,5 +290,5 @@ def submit_condor_workers(
     with open(submit_path, "w") as submit_file:
         submit_file.write(submit.contents)
 
-    return condor_submit(submit_path)
+    return (condor_home, condor_submit(submit_path))
 

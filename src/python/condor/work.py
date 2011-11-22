@@ -14,22 +14,24 @@ import condor
 
 logger = condor.get_logger(__name__, level = "NOTSET")
 
-def work_once(condor_id, req_socket, task):
+def work_once(condor_id, req_socket, task_message):
     """Request and/or complete a single unit of work."""
 
     # get an assignment
-    if task is None:
+    if task_message is None:
         condor.send_pyobj_compressed(
             req_socket,
             condor.labor.ApplyMessage(condor_id),
             )
 
-        task = condor.recv_pyobj_compressed(req_socket)
+        task_message = condor.recv_pyobj_compressed(req_socket)
 
-        if task is None:
+        if task_message is None:
             logger.info("received null assignment; terminating")
 
             return None
+
+    task = task_message.get_task()
 
     # complete the assignment
     try:
@@ -75,15 +77,15 @@ def work_once(condor_id, req_socket, task):
 def work_loop(condor_id, req_socket):
     """Repeatedly request and complete units of work."""
 
-    task = None
+    task_message = None
 
     while True:
         try:
-            task = work_once(condor_id, req_socket, task)
+            task_message = work_once(condor_id, req_socket, task_message)
         except Exception:
             raise
 
-        if task is None:
+        if task_message is None:
             break
 
 @plac.annotations(
