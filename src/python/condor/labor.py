@@ -522,8 +522,8 @@ class SerialManager(object):
     def clean(self):
         pass
 
-def do(requests, workers, local = False, handler = lambda _, x: x):
-    """Distribute or compute locally."""
+def do(requests, workers, local = False):
+    """Do work remotely or locally; yield result pairs."""
 
     tasks = sorted(map(Task.from_request, requests), key = lambda _: random.random())
 
@@ -536,10 +536,16 @@ def do(requests, workers, local = False, handler = lambda _, x: x):
         manager = SerialManager(tasks)
 
     try:
-        for (task, result) in manager.manage():
-            yield (task, handler(task, result))
+        for item in manager.manage():
+            yield item
     finally:
         manager.clean()
 
-do_or_distribute = do
+def do_for(requests, workers, handler = lambda _, x: x, local = False):
+    """Do work remotely or locally; apply handler to result pairs."""
+
+    for (task, result) in do(requests, workers, local = local):
+        handler(task, result)
+
+do_or_distribute = do_for
 
