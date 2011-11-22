@@ -395,7 +395,7 @@ class DistributedManager(object):
 
         self._cache.delete()
 
-        logger.info("removed argument cache")
+        logger.info("cleaned up argument cache")
 
 class LocalWorkerProcess(multiprocessing.Process):
     """Work in a subprocess."""
