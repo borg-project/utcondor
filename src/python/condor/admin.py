@@ -274,7 +274,7 @@ def submit_condor_workers(
 
     for working_path in working_paths:
         arg_format = '"-c \'%s ""$0"" $@\' -m condor.work %s $(Cluster).$(Process) %s"'
-        main_path = sys.modules["__main__"].__file__
+        main_path = os.path.abspath(sys.modules["__main__"].__file__)
 
         submit \
             .pairs(
