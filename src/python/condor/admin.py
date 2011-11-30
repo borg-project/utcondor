@@ -157,7 +157,7 @@ def condor_submit(submit_path):
     if match:
         (jobs, cluster) = map(int, match.groups())
 
-        logger.info("submitted %i condor jobs to cluster %i", jobs, cluster)
+        logger.info("submitted %i condor jobs as group %i", jobs, cluster)
 
         return cluster
     else:
@@ -198,6 +198,22 @@ def condor_release(specifiers):
         return False
     else:
         return True
+
+def unclaimed(constraint = None):
+    """Return the number of unclaimed nodes matching constraint."""
+
+    command = ["condor_status"]
+
+    if constraint is not None:
+        command += ["-constraint", constraint]
+
+    (stdout, stderr) = check_call_capturing(command)
+    parts = stdout.splitlines()[-1].split()
+
+    if len(parts) != 8:
+        raise Exception("unable to parse condor_status output")
+
+    return int(parts[4])
 
 def default_condor_home():
     return "workers/%s" % datetime.datetime.now().replace(microsecond = 0).isoformat()
@@ -290,5 +306,9 @@ def submit_condor_workers(
     with open(submit_path, "w") as submit_file:
         submit_file.write(submit.contents)
 
-    return (condor_home, condor_submit(submit_path))
+    group_number = condor_submit(submit_path)
+
+    logger.info("(cluster has %i matching nodes unclaimed)", unclaimed(matching))
+
+    return (condor_home, group_number)
 
