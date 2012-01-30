@@ -308,7 +308,7 @@ def submit_condor_workers(
 
     group_number = condor_submit(submit_path)
 
-    logger.info("(cluster has %i matching nodes unclaimed)", unclaimed(matching))
+    logger.info("(cluster has %i matching node(s) unclaimed)", unclaimed(matching))
 
     return (condor_home, group_number)
 
