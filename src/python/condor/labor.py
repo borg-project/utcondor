@@ -527,6 +527,11 @@ def do(requests, workers, local = False):
 
     tasks = sorted(map(Task.from_request, requests), key = lambda _: random.random())
 
+    if workers == "auto":
+        workers = min(256, len(tasks))
+    else:
+        workers = int(workers)
+
     if workers > 0:
         if local:
             manager = ParallelManager(tasks, workers)
