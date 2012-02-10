@@ -1,4 +1,5 @@
 import sys
+import curses
 import logging
 
 class TTY_Formatter(logging.Formatter):
@@ -20,8 +21,6 @@ class TTY_Formatter(logging.Formatter):
         """
 
         # select and construct format string
-        import curses
-
         format = None
 
         if stream and hasattr(stream, "isatty") and stream.isatty():

@@ -12,22 +12,31 @@ import traceback
 import zmq
 import condor
 
-logger = condor.get_logger(__name__, level = "NOTSET")
+logger = condor.log.get_logger(__name__, default_level = "NOTSET")
 
 def work_once(condor_id, req_socket, task_message):
     """Request and/or complete a single unit of work."""
 
     # get an assignment
+    poller = zmq.Poller()
+
+    poller.register(req_socket, zmq.POLLIN)
+
     if task_message is None:
         condor.send_pyobj_compressed(
             req_socket,
-            condor.labor.ApplyMessage(condor_id),
+            condor.messages.ApplyMessage(condor_id),
             )
 
-        task_message = condor.recv_pyobj_compressed(req_socket)
+        polled = poller.poll(timeout = 60 * 1000)
+
+        if dict(polled).get(req_socket, 0) & zmq.POLLIN:
+            task_message = condor.recv_pyobj_compressed(req_socket)
+        else:
+            task_message = None
 
         if task_message is None:
-            logger.info("received null assignment; terminating")
+            logger.info("received null assignment or timed out; terminating")
 
             return None
 
@@ -35,8 +44,6 @@ def work_once(condor_id, req_socket, task_message):
 
     # complete the assignment
     try:
-        condor.labor._current_task = task
-
         logger.info("starting work on task %s", task.key)
 
         result = task()
@@ -45,7 +52,7 @@ def work_once(condor_id, req_socket, task_message):
 
         condor.send_pyobj_compressed(
             req_socket,
-            condor.labor.InterruptedMessage(condor_id, task.key),
+            condor.messages.InterruptedMessage(condor_id, task.key),
             )
 
         req_socket.recv()
@@ -56,7 +63,7 @@ def work_once(condor_id, req_socket, task_message):
 
         condor.send_pyobj_compressed(
             req_socket,
-            condor.labor.ErrorMessage(condor_id, task.key, description),
+            condor.messages.ErrorMessage(condor_id, task.key, description),
             )
 
         req_socket.recv()
@@ -65,12 +72,10 @@ def work_once(condor_id, req_socket, task_message):
 
         condor.send_pyobj_compressed(
             req_socket,
-            condor.labor.DoneMessage(condor_id, task.key, result),
+            condor.messages.DoneMessage(condor_id, task.key, result),
             )
 
         return condor.recv_pyobj_compressed(req_socket)
-
-    condor.labor._current_task = None
 
     return None
 
@@ -96,7 +101,7 @@ def work_loop(condor_id, req_socket):
 def main(req_address, condor_id, main_path = None):
     """Do arbitrary distributed work."""
 
-    condor.enable_default_logging()
+    condor.log.enable_default_logging()
 
     # replace the __main__ module, if necessary
     if main_path is not None:
@@ -110,6 +115,7 @@ def main(req_address, condor_id, main_path = None):
 
     req_socket = context.socket(zmq.REQ)
 
+    req_socket.setsockopt(zmq.LINGER, 60 * 1000)
     req_socket.connect(req_address) 
 
     # enter the work loop

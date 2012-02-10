@@ -10,7 +10,7 @@ import cStringIO as StringIO
 import subprocess
 import condor
 
-logger = condor.get_logger(__name__, level = "INFO")
+logger = condor.log.get_logger(__name__, level = "INFO")
 
 def call_capturing(arguments, input = None, preexec_fn = None):
     """Spawn a process and return its output and status code."""
@@ -150,7 +150,7 @@ class CondorSubmission(object):
 def condor_submit(submit_path):
     """Submit to condor; return the cluster number."""
 
-    (stdout, stderr) = condor.check_call_capturing(["/usr/bin/env", "condor_submit", submit_path])
+    (stdout, stderr) = check_call_capturing(["/usr/bin/env", "condor_submit", submit_path])
     expression = r"(\d+) job\(s\) submitted to cluster (\d+)\."
     match = re.match(expression , stdout.splitlines()[-1])
 
@@ -175,7 +175,7 @@ def condor_rm(specifier):
     else:
         return True
 
-def condor_hold(specifiers):
+def condor_hold(*specifiers):
     """Hold condor job(s)."""
 
     logger.info("holding condor job(s) matched by %s", specifiers)
@@ -194,6 +194,18 @@ def condor_release(specifiers):
 
     try:
         check_call_capturing(["condor_release"] + map(str, specifiers))
+    except subprocess.CalledProcessError:
+        return False
+    else:
+        return True
+
+def condor_vacate_job(specifier):
+    """Bump condor job(s)."""
+
+    logger.info("vacating condor jobs matched by %s", specifier)
+
+    try:
+        check_call_capturing(["condor_vacate_job", str(specifier)])
     except subprocess.CalledProcessError:
         return False
     else:
