@@ -1,5 +1,6 @@
 """@author: Bryan Silverthorn <bcs@cargo-cult.org>"""
 
+import os
 import signal
 import multiprocessing
 import condor
@@ -36,7 +37,7 @@ class LocalWorkerProcess(multiprocessing.Process):
             while True:
                 # get an assignment
                 if task is None:
-                    self.stm_queue.put(ApplyMessage(os.getpid()))
+                    self.stm_queue.put(condor.messages.ApplyMessage(os.getpid()))
 
                     task = self.mts_queue.get()
 
@@ -53,7 +54,7 @@ class LocalWorkerProcess(multiprocessing.Process):
                 except KeyboardInterrupt, error:
                     logger.warning("interruption during task %s", task.key)
 
-                    self.stm_queue.put(InterruptedMessage(os.getpid(), task.key))
+                    self.stm_queue.put(condor.messages.InterruptedMessage(os.getpid(), task.key))
                     self.mts_queue.get()
 
                     break
@@ -66,14 +67,14 @@ class LocalWorkerProcess(multiprocessing.Process):
 
                     logger.warning("error during task %s:\n%s", task.key, description)
 
-                    self.stm_queue.put(ErrorMessage(os.getpid(), task.key, description))
+                    self.stm_queue.put(condor.messages.ErrorMessage(os.getpid(), task.key, description))
                     self.mts_queue.get()
 
                     break
                 else:
                     logger.info("finished task %s", task.key)
 
-                    self.stm_queue.put(DoneMessage(os.getpid(), task.key, result))
+                    self.stm_queue.put(condor.messages.DoneMessage(os.getpid(), task.key, result))
 
                     task = self.mts_queue.get()
         except DeathRequestedError:
@@ -85,7 +86,7 @@ class ParallelManager(object):
     def __init__(self, tasks, workers):
         """Initialize."""
 
-        self._core = ManagerCore(tasks)
+        self._core = condor.managers.ManagerCore(tasks)
 
         logger.info("distributing %i tasks to %i workers", len(tasks), workers)
 
