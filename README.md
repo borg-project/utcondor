@@ -40,20 +40,15 @@ Any arguments passed to the remotely-executed callable must be pickleable.
 Installation
 ------------
 
-Install the two dependencies; `pyzmq-static` is probably the easiest way to
-install the Python bindings to [ØMQ](http://www.zeromq.org/):
+First, make sure that the condor binaries are in your PATH. Does "condor_q" run?
+
+Then you can install the package. The latest release is pip-installable, so
 
 ```sh
-$ pip install plac
-$ pip install pyzmq-static
+$ pip install utcondor
 ```
 
-Then use waf to install utcondor into your local Python installation:
-
-```sh
-$ ./waf configure
-$ ./waf install
-```
+should work.
 
 You're running inside a [virtualenv](http://pypi.python.org/pypi/virtualenv),
 right?
