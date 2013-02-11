@@ -9,7 +9,7 @@ setuptools.setup(
         ],
     # description
     name = "utcondor",
-    version = "0.4",
+    version = "0.4.1",
     author = "Bryan Silverthorn",
     author_email = "bcs@cargo-cult.org",
     description = "tools for distributed computing at UTCS",
