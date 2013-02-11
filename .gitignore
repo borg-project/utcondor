@@ -1,5 +1,4 @@
 .*.swp
 *.pyc
-.lock-wafbuild
-.waf-*
-build/
+/dist/
+/utcondor.egg-info/
