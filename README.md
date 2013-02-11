@@ -40,7 +40,8 @@ Any arguments passed to the remotely-executed callable must be pickleable.
 Installation
 ------------
 
-First, make sure that the condor binaries are in your PATH. Does "condor_q" run?
+First, make sure that the condor binaries are accessible. Does "condor_q" run?
+If not, you may want to add /lusr/opt/condor/bin to your PATH.
 
 Then you can install the package. The latest release is pip-installable, so
 
