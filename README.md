@@ -54,6 +54,33 @@ should work.
 You're running inside a [virtualenv](http://pypi.python.org/pypi/virtualenv),
 right?
 
+Advanced Settings
+-----------------
+
+### Condor Matching
+
+The default Condor match expression is set in condor/defaults.py:
+
+```python
+condor_matching = "InMastodon && (Arch == \"X86_64\") && (OpSys == \"LINUX\") && (Memory > 1024)"
+```
+
+Note that this includes the UT-specific "InMastodon" requirement. If you are
+attempting to use this library outside of UT, or if you want greater control
+over job matching, you can globally override this setting. For example,
+including the statement
+
+```python
+condor.defaults.condor_matching = (
+    "regexp(\"rhavan-.*\", ParallelSchedulingGroup)"
+    " && (Arch == \"X86_64\")"
+    " && (OpSys == \"LINUX\")"
+    " && (Memory > 1024)")
+```
+
+in your code will require your jobs to run only on nodes with names that begin
+with "rhavan-".
+
 Caveat Emptor
 -------------
 
