@@ -11,6 +11,7 @@ logger = condor.log.get_logger(__name__, default_level = "INFO")
 from .distributed import DistributedManager
 from .parallel import ParallelManager
 from .serial import SerialManager
+from .http_status import serve_http_status
 
 class Task(object):
     """One unit of distributable work."""
@@ -30,6 +31,9 @@ class Task(object):
 
     def __call__(self):
         return self.call(*self.args, **self.kwargs)
+
+    def __str__(self):
+        return '%s(*%s, **%s)' % (self.call.__name__, self.args, self.kwargs)
 
     @staticmethod
     def from_request(request):
@@ -63,6 +67,9 @@ class TaskState(object):
                 max(wstate.timestamp for wstate in self.working),
                 random.random(),
                 )
+
+    def is_finished(self):
+        return self.score()[0] != sys.maxint
 
 class WorkerState(object):
     """Current state of a known worker process."""
@@ -118,6 +125,8 @@ class ManagerCore(object):
 
         self.tstates = dict((t.key, TaskState(t)) for t in tasks)
         self.wstates = {}
+
+        serve_http_status(self)
 
     def handle(self, message):
         """Manage workers and tasks."""
