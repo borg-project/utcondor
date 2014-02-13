@@ -1,0 +1,218 @@
+#!/usr/bin/env python
+
+import argparse
+import getpass
+import glob
+import logging
+import os
+import re
+import select
+import subprocess
+import sys
+import threading
+import time
+
+FLAGS = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+FLAGS.add_argument('-b', '--block', action='store_true',
+                   help='wait until the job completes')
+FLAGS.add_argument('-d', '--description', metavar='DESC',
+                   help='use DESC as the condor job description')
+FLAGS.add_argument('--dry-run', action='store_true',
+                   help='only pretend to send jobs to condor')
+FLAGS.add_argument('-e', '--email', default=getpass.getuser() + '@cs.utexas.edu', metavar='EMAIL',
+                   help='send job notifications to EMAIL')
+FLAGS.add_argument('-f', '--follow', default='', metavar='PATTERN',
+                   help='tail files matching PATTERN from the job')
+FLAGS.add_argument('-l', '--label',
+                   help='use LABEL for job files')
+FLAGS.add_argument('-m', '--memory', type=int, default=1, metavar='N',
+                   help='require at least N MB of memory per worker')
+FLAGS.add_argument('-n', '--notification', default='complete', metavar='LEVEL',
+                   help='send job notifications at these times')
+FLAGS.add_argument('-r', '--root', metavar='DIR',
+                   help='use DIR as the filesystem root for the condor job')
+FLAGS.add_argument('-t', '--template', metavar='FILE',
+                   help='load a specific job template from FILE')
+FLAGS.add_argument('-w', '--workers', type=int, default=1, metavar='N',
+                   help='launch N workers for this job')
+
+FLAGS.add_argument('cmd', metavar='CMD', nargs=argparse.REMAINDER, help='run this command')
+
+TEMPLATE = '''
++Group = "GRAD"
++Project = "AI_ROBOTICS"
++ProjectDescription = "%(description)s"
+
+universe = vanilla
+notification = %(notification)s
+notify_user = %(email)s
+requirements = (InMastodon == false) && (Arch == "%(arch)s") && (Memory >= %(memory)d)
+rank = KFlops
+getenv = True
+initialdir = %(root)s
+executable = %(binary)s
+arguments = %(args)s
+log = %(log)s
+input = %(stdin)s
+output = %(stdout)s
+error = %(stderr)s
+
+Queue %(workers)s
+'''
+
+
+def run_on_condor(binary, args, description,
+                  root=None,
+                  label=None,
+                  email=None,
+                  template=TEMPLATE,
+                  condor_submit='condor_submit',
+                  condor_wait='condor_wait',
+                  follow='*.stderr',
+                  notification='complete',
+                  dry_run=False,
+                  arch='INTEL',
+                  workers=1,
+                  memory=1,
+                  ):
+    '''Run a binary on condor.
+
+    Returns a callable that will block until the condor job completes.
+
+    binary: A full or partial path to the binary.
+    args: A list of command line arguments to pass to the binary.
+    description: A short text description of the condor job.
+    root: A full or partial directory name that tells where to anchor files for
+      this job.
+    label: A string to use for condor filenames.
+    email: Email address for condor notifications. Defaults to
+      ${USER}@cs.utexas.edu.
+    template: A path to the condor job template to use, if a custom template is
+      desired.
+    condor_submit: Path to the condor_submit binary.
+    condor_wait: Path to the condor_wait binary.
+    follow: A string describing the output files to follow from the job (like
+      tail -f). The files matching this pattern (if any) will be tailed to the
+      correct output stream for this process.
+    notification: A string telling condor when to notify us about this job.
+    dry_run: If True, do not actually submit the job to condor, but do
+      everything else to the extent possible.
+    arch: Restrict the job to run on machines with this condor Arch.
+    workers: Launch this many copies of the job on condor.
+    memory: Minimum memory (in MB) required for a worker.
+    '''
+    root = os.path.abspath(root or os.getcwd())
+    if not os.path.exists(root):
+        logging.info('%s: creating root directory', root)
+        os.makedirs(root)
+
+    a = ''.join('_%s' % a for a in sorted(args))
+    b = os.path.basename(binary)
+    label = re.sub(r'\W+', '-', label or '%s%s' % (b, a)).strip('-')
+
+    def path(ext, proc=''):
+        return os.path.join(root, '%s%s.%s' % (label, proc, ext))
+
+    # set up the config for the condor job
+    conf_path = os.path.join(root, '%s.conf' % label)
+    with open(conf_path, 'w') as handle:
+        handle.write(TEMPLATE % dict(
+                args=' '.join(args),
+                binary=binary,
+                root=root,
+                description=description,
+                email=email or getpass.getuser() + '@cs.utexas.edu',
+                label=label,
+                log=path('log'),
+                notification=notification,
+                shell=os.getenv('SHELL'),
+                stdin=path('stdin', '$(PROCESS)'),
+                stdout=path('stdout', '$(PROCESS)'),
+                stderr=path('stderr', '$(PROCESS)'),
+                arch=arch,
+                workers=workers,
+                memory=memory,
+                ))
+    logging.debug('%s: job configuration:\n%s', conf_path, open(conf_path).read())
+
+    # put any pending data from stdin into the stdin file for the job
+    handles = [open(path('stdin', i), 'wb') for i in range(workers)]
+    [h.write('') for h in handles]
+    copied = 0
+    ready, _, _ = select.select([sys.stdin], [], [], 0)
+    while ready:
+        bytes = ready[0].read(8192)
+        copied += len(bytes)
+        [h.write(bytes) for h in handles]
+        ready, _, _ = select.select([sys.stdin], [], [], 0)
+    logging.info('%s: copied %dkB from stdin', path('stdin'), copied // 1024)
+    [h.close() for h in handles]
+
+    # queue the condor job
+    if not dry_run:
+        logging.info('%s: submitting job', conf_path)
+        subprocess.call([condor_submit, conf_path])
+    else:
+        # simulate the creation of the output files
+        logging.info('%s: submitting job [DRY RUN]', conf_path)
+        for i in range(workers):
+            open(path('stdout', i), 'wb').write('')
+            open(path('stderr', i), 'wb').write('')
+
+    def echo(path):
+        while not os.path.exists(path):
+            time.sleep(1.)
+        sink = sys.stdout if 'stdout' in path else sys.stderr
+        with open(path) as handle:
+            while True:
+                try:
+                    sink.write(handle.read(8192))
+                except KeyboardInterrupt:
+                    break
+
+    # follow any matching output files
+    for filename in glob.glob(os.path.join(root, '%s%s' % (label, follow))):
+        f = threading.Thread(target=echo, args=(filename, ))
+        f.daemon = True
+        f.start()
+
+    # return a callback that will block until the job has finished
+    def block():
+        logging.info('%s: waiting...', path('log'))
+        subprocess.call([condor_wait, path('log')])
+
+    return block
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=logging.DEBUG,
+        format='%(levelname).1s %(asctime)s %(message)s')
+
+    args = FLAGS.parse_args()
+    if not args.cmd:
+        FLAGS.error('a command must be provided after any options')
+    if not args.description:
+        FLAGS.error('a --description must be provided')
+
+    template = TEMPLATE
+    if args.template and os.path.exists(args.template):
+        template = open(args.template).read()
+
+    wait = run_on_condor(args.cmd[0], args.cmd[1:],
+                         args.description,
+                         root=args.root,
+                         label=args.label,
+                         email=args.email,
+                         follow=args.follow,
+                         notification=args.notification,
+                         template=template,
+                         dry_run=args.dry_run,
+                         workers=args.workers,
+                         memory=args.memory)
+
+    if args.block:
+        wait()
