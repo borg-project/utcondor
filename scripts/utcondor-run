@@ -30,10 +30,6 @@ FLAGS.add_argument('--group', default='GRAD', metavar='GROUP',
                    help='submit to Condor GROUP')
 FLAGS.add_argument('-l', '--label',
                    help='use LABEL for job files')
-FLAGS.add_argument('-m', '--memory', type=int, default=1, metavar='N',
-                   help='require at least N MB of memory per worker')
-FLAGS.add_argument('--no-mastodon', action='store_true',
-                   help='do not use mastodon machines')
 FLAGS.add_argument('-n', '--notification', default='complete',
                    choices=('always', 'complete', 'error', 'never'),
                    help='send job notifications at these times')
@@ -83,10 +79,7 @@ def run_on_condor(binary, args, description,
                   follow='*.stderr',
                   notification='complete',
                   dry_run=False,
-                  arch='X86_64',
                   workers=1,
-                  memory=1,
-                  mastodon=True,
                   ):
     '''Run a binary on condor.
 
@@ -128,17 +121,10 @@ def run_on_condor(binary, args, description,
     dry_run : bool, optional
         If True, do not actually submit the job to condor, but do everything
         else to the extent possible.
-    arch : str, optional
-        Restrict the job to run on machines with this condor Arch. Defaults to
-        'X86_64'.
     workers : int, optional
         Launch this many copies of the job on condor. Defaults to 1.
-    memory : int, optional
-        Minimum memory (in MB) required for a worker. Defaults to 1024.
-    mastodon : bool, optional
-        Whether to use Mastodon Condor machines for this job. Defaults to True.
     '''
-    root = os.path.abspath(root or condor.defaults.home or os.getcwd())
+    root = os.path.abspath(root or condor.raw.default_condor_home())
     if not os.path.exists(root):
         logging.info('%s: creating root directory', root)
         os.makedirs(root)
@@ -150,20 +136,12 @@ def run_on_condor(binary, args, description,
     def path(ext, proc=''):
         return os.path.join(root, '{}{}.{}'.format(label, proc, ext))
 
-    # configure requirements for the job
-    requirements = ('(InMastodon == {mastodon}) && '
-                    '(Arch == "{arch}") && '
-                    '(Memory >= {memory})'.format(
-            arch=arch, mastodon=mastodon, memory=memory))
-
     # set up the config for the condor job
     conf_path = os.path.join(root, '{}.conf'.format(label))
     with open(conf_path, 'w') as handle:
         handle.write(TEMPLATE.format(
                 args=' '.join(args),
                 binary=binary,
-                root=root,
-                requirements=requirements or condor.defaults.condor_matching,
                 description=description,
                 email=email,
                 group=group,
@@ -171,7 +149,7 @@ def run_on_condor(binary, args, description,
                 log=path('log'),
                 notification=notification,
                 project=project,
-                requirements=requirements,
+                requirements=condor.defaults.condor_matching,
                 root=root,
                 shell=os.getenv('SHELL'),
                 stderr=path('stderr', '$(PROCESS)'),
@@ -231,10 +209,7 @@ def run_on_condor(binary, args, description,
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=logging.DEBUG,
-        format='%(levelname).1s %(asctime)s %(message)s')
+    condor.log.enable_default_logging()
 
     args = FLAGS.parse_args()
     if not args.cmd:
@@ -258,9 +233,7 @@ if __name__ == '__main__':
                          template=template,
                          dry_run=args.dry_run,
                          workers=args.workers,
-                         memory=args.memory,
-                         mastodon=not args.no_mastodon,
     )
 
-    if args.block:
+    if args.block or args.follow:
         wait()
