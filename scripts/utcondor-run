@@ -41,25 +41,25 @@ FLAGS.add_argument('-w', '--workers', type=int, default=1, metavar='N',
 FLAGS.add_argument('cmd', metavar='CMD', nargs=argparse.REMAINDER, help='run this command')
 
 TEMPLATE = '''
-+Group = "GRAD"
-+Project = "AI_ROBOTICS"
-+ProjectDescription = "%(description)s"
++Group = "{group}"
++Project = "{project}"
++ProjectDescription = "{description}"
 
 universe = vanilla
-notification = %(notification)s
-notify_user = %(email)s
-requirements = (InMastodon == false) && (Arch == "%(arch)s") && (Memory >= %(memory)d)
+notification = {notification}
+notify_user = {email}
+requirements = {requirements}
 rank = KFlops
 getenv = True
-initialdir = %(root)s
-executable = %(binary)s
-arguments = %(args)s
-log = %(log)s
-input = %(stdin)s
-output = %(stdout)s
-error = %(stderr)s
+initialdir = {root}
+executable = {binary}
+arguments = {args}
+log = {log}
+input = {stdin}
+output = {stdout}
+error = {stderr}
 
-Queue %(workers)s
+Queue {workers}
 '''
 
 
@@ -67,6 +67,8 @@ def run_on_condor(binary, args, description,
                   root=None,
                   label=None,
                   email=None,
+                  group='GRAD',
+                  project='AI_ROBOTICS',
                   template=TEMPLATE,
                   condor_submit='condor_submit',
                   condor_wait='condor_wait',
@@ -96,6 +98,10 @@ def run_on_condor(binary, args, description,
     email : str, optional
         Email address for condor notifications. Defaults to
         ${USER}@cs.utexas.edu.
+    group : str, optional
+        Condor group to allocate this job to. Defaults to 'GRAD'.
+    project : str, optional
+        Condor project to allocate this job to. Defaults to 'AI_ROBOTICS'.
     template : str, optional
         A path to the condor job template to use, if a custom template is
         desired.
@@ -133,25 +139,32 @@ def run_on_condor(binary, args, description,
     def path(ext, proc=''):
         return os.path.join(root, '%s%s.%s' % (label, proc, ext))
 
+    # configure requirements for the job
+    requirements = ('(InMastodon == true) && '
+                    '(Arch == "{arch}") && '
+                    '(Memory >= {memory})'.format(
+            arch=arch, memory=memory))
+
     # set up the config for the condor job
     conf_path = os.path.join(root, '%s.conf' % label)
     with open(conf_path, 'w') as handle:
-        handle.write(TEMPLATE % dict(
+        handle.write(TEMPLATE.format(
                 args=' '.join(args),
                 binary=binary,
-                root=root,
                 description=description,
                 email=email or getpass.getuser() + '@cs.utexas.edu',
+                group=group,
                 label=label,
                 log=path('log'),
                 notification=notification,
+                project=project,
+                requirements=requirements,
+                root=root,
                 shell=os.getenv('SHELL'),
+                stderr=path('stderr', '$(PROCESS)'),
                 stdin=path('stdin', '$(PROCESS)'),
                 stdout=path('stdout', '$(PROCESS)'),
-                stderr=path('stderr', '$(PROCESS)'),
-                arch=arch,
                 workers=workers,
-                memory=memory,
                 ))
     logging.debug('%s: job configuration:\n%s', conf_path, open(conf_path).read())
 
