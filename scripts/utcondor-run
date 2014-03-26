@@ -81,27 +81,45 @@ def run_on_condor(binary, args, description,
 
     Returns a callable that will block until the condor job completes.
 
-    binary: A full or partial path to the binary.
-    args: A list of command line arguments to pass to the binary.
-    description: A short text description of the condor job.
-    root: A full or partial directory name that tells where to anchor files for
-      this job.
-    label: A string to use for condor filenames.
-    email: Email address for condor notifications. Defaults to
-      ${USER}@cs.utexas.edu.
-    template: A path to the condor job template to use, if a custom template is
-      desired.
-    condor_submit: Path to the condor_submit binary.
-    condor_wait: Path to the condor_wait binary.
-    follow: A string describing the output files to follow from the job (like
-      tail -f). The files matching this pattern (if any) will be tailed to the
-      correct output stream for this process.
-    notification: A string telling condor when to notify us about this job.
-    dry_run: If True, do not actually submit the job to condor, but do
-      everything else to the extent possible.
-    arch: Restrict the job to run on machines with this condor Arch.
-    workers: Launch this many copies of the job on condor.
-    memory: Minimum memory (in MB) required for a worker.
+    binary : str
+        A full or partial path to the binary.
+    args : list of str
+        A list of command line arguments to pass to the binary.
+    description : str
+        A short text description of the condor job.
+    root : str, optional
+        A full or partial directory name that tells where to anchor files for
+        this job. Defaults to the current working directory.
+    label : str, optional
+        A string to use for condor filenames. Defaults to a filesystem-safe
+        string containing the command-line arguments.
+    email : str, optional
+        Email address for condor notifications. Defaults to
+        ${USER}@cs.utexas.edu.
+    template : str, optional
+        A path to the condor job template to use, if a custom template is
+        desired.
+    condor_submit : str, optional
+        Path to the condor_submit binary. Defaults to $(which condor_submit).
+    condor_wait : str, optional
+        Path to the condor_wait binary. Defaults to $(which condor_wait).
+    follow : str, optional
+        A string describing the output files to follow from the job (like
+        tail -f). The files matching this pattern (if any) will be tailed to
+        the correct output stream for this process.
+    notification : str, optional
+        A string telling condor when to notify us about this job. The default is
+        'complete'; other possibilities are 'always', 'error', and 'never'.
+    dry_run : bool, optional
+        If True, do not actually submit the job to condor, but do everything
+        else to the extent possible.
+    arch : str, optional
+        Restrict the job to run on machines with this condor Arch. Defaults to
+        'X86_64'.
+    workers : int, optional
+        Launch this many copies of the job on condor. Defaults to 1.
+    memory : int, optional
+        Minimum memory (in MB) required for a worker. Defaults to 1024.
     '''
     root = os.path.abspath(root or os.getcwd())
     if not os.path.exists(root):
