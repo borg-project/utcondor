@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import condor
 import getpass
 import glob
 import logging
@@ -99,7 +100,7 @@ def run_on_condor(binary, args, description,
         A short text description of the condor job.
     root : str, optional
         A full or partial directory name that tells where to anchor files for
-        this job. Defaults to the current working directory.
+        this job. Defaults to UTCONDOR_HOME or to condor.defaults.home.
     label : str, optional
         A string to use for condor filenames. Defaults to a filesystem-safe
         string containing the command-line arguments.
@@ -137,7 +138,7 @@ def run_on_condor(binary, args, description,
     mastodon : bool, optional
         Whether to use Mastodon Condor machines for this job. Defaults to True.
     '''
-    root = os.path.abspath(root or os.getcwd())
+    root = os.path.abspath(root or condor.defaults.home or os.getcwd())
     if not os.path.exists(root):
         logging.info('%s: creating root directory', root)
         os.makedirs(root)
@@ -161,6 +162,8 @@ def run_on_condor(binary, args, description,
         handle.write(TEMPLATE.format(
                 args=' '.join(args),
                 binary=binary,
+                root=root,
+                requirements=requirements or condor.defaults.condor_matching,
                 description=description,
                 email=email,
                 group=group,
@@ -175,7 +178,7 @@ def run_on_condor(binary, args, description,
                 stdin=path('stdin', '$(PROCESS)'),
                 stdout=path('stdout', '$(PROCESS)'),
                 workers=workers,
-                ))
+        ))
     logging.debug('%s: job configuration:\n%s', conf_path, open(conf_path).read())
 
     # put any pending data from stdin into the stdin file for the job
