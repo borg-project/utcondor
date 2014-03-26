@@ -73,7 +73,7 @@ def run_on_condor(binary, args, description,
                   follow='*.stderr',
                   notification='complete',
                   dry_run=False,
-                  arch='INTEL',
+                  arch='X86_64',
                   workers=1,
                   memory=1,
                   ):
