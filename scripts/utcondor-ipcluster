@@ -1,0 +1,82 @@
+#!/bin/bash
+
+client=notebook
+port=53412
+profile=utcs-cluster
+workers=10
+ipaddr=$(ifconfig eth0 | grep 'inet addr' | sed 's|.*inet addr.\([^ ]*\).*|\1|')
+
+usage() {
+    cat 1>&2 <<EOF
+Usage: $0 [-c CLIENT] [-p PROFILE] [-w WORKERS]
+
+Launch an IPython cluster, and start an IPython client to use it.
+
+Arguments:
+  -c    start this IPython client (default notebook)
+  -p    use this IPython profile (default utcs-cluster)
+  -w    launch this many ipengine workers on Condor (default 10)
+EOF
+    exit 1
+}
+
+while getopts ":w:p:P:" opt
+do case "$opt" in
+    c*)
+        client=$OPTARG
+        ;;
+    p*)
+        profile=$OPTARG
+        ;;
+    P*)
+        port=$OPTARG
+        ;;
+    w*)
+        workers=$OPTARG
+        ;;
+    *)
+        usage
+        ;;
+    esac
+done
+
+if [ -z "$(which ipython)" ]
+then
+    echo "Error! Cannot locate ipython."
+    echo
+    usage
+fi
+
+echo
+echo "Starting ipcontroller on $ipaddr ..."
+ipcontroller --ip $ipaddr --port $port --profile $profile --log-to-file True &
+
+echo
+echo "Starting ipengine workers ..."
+ssh submit64 $(which utcondor-run) \
+    --description ipython-cluster-workers \
+    --workers $workers \
+    --label ipengine \
+    $(which ipengine) --port $port --profile $profile
+
+echo
+echo "To get started with the cluster, try the following code:"
+echo
+echo "********************************************************************************"
+echo "from IPython.parallel import Client"
+echo "cluster = Client(profile='$profile')"
+echo "lb = cluster.load_balanced_view()"
+echo "********************************************************************************"
+echo
+
+echo
+echo "Starting ipython $client ..."
+ipython $client --pylab --profile $profile --log-level 40
+
+echo
+echo 'Shutting down ipengine workers ...'
+ssh submit64 condor_rm $USER
+
+echo
+echo 'Shutting down ipcontroller ...'
+killall ipcontroller
