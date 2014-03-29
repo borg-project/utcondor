@@ -20,16 +20,13 @@ EOF
     exit 1
 }
 
-while getopts ":w:p:P:" opt
+while getopts ":c:p:w:" opt
 do case "$opt" in
     c*)
         client=$OPTARG
         ;;
     p*)
         profile=$OPTARG
-        ;;
-    P*)
-        port=$OPTARG
         ;;
     w*)
         workers=$OPTARG
