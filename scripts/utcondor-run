@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import condor
 import getpass
 import glob
 import logging
@@ -14,7 +15,7 @@ import time
 
 FLAGS = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
+)
 FLAGS.add_argument('-b', '--block', action='store_true',
                    help='wait until the job completes')
 FLAGS.add_argument('-d', '--description', metavar='DESC',
@@ -25,12 +26,15 @@ FLAGS.add_argument('-e', '--email', default=getpass.getuser() + '@cs.utexas.edu'
                    help='send job notifications to EMAIL')
 FLAGS.add_argument('-f', '--follow', default='', metavar='PATTERN',
                    help='tail files matching PATTERN from the job')
+FLAGS.add_argument('--group', default='GRAD', metavar='GROUP',
+                   help='submit to Condor GROUP')
 FLAGS.add_argument('-l', '--label',
                    help='use LABEL for job files')
-FLAGS.add_argument('-m', '--memory', type=int, default=1, metavar='N',
-                   help='require at least N MB of memory per worker')
-FLAGS.add_argument('-n', '--notification', default='complete', metavar='LEVEL',
+FLAGS.add_argument('-n', '--notification', default='complete',
+                   choices=('always', 'complete', 'error', 'never'),
                    help='send job notifications at these times')
+FLAGS.add_argument('--project', default='AI_ROBOTICS', metavar='PROJECT',
+                   help='submit to Condor PROJECT')
 FLAGS.add_argument('-r', '--root', metavar='DIR',
                    help='use DIR as the filesystem root for the condor job')
 FLAGS.add_argument('-t', '--template', metavar='FILE',
@@ -41,100 +45,118 @@ FLAGS.add_argument('-w', '--workers', type=int, default=1, metavar='N',
 FLAGS.add_argument('cmd', metavar='CMD', nargs=argparse.REMAINDER, help='run this command')
 
 TEMPLATE = '''
-+Group = "GRAD"
-+Project = "AI_ROBOTICS"
-+ProjectDescription = "%(description)s"
++Group = "{group}"
++Project = "{project}"
++ProjectDescription = "{description}"
 
 universe = vanilla
-notification = %(notification)s
-notify_user = %(email)s
-requirements = (InMastodon == false) && (Arch == "%(arch)s") && (Memory >= %(memory)d)
+notification = {notification}
+notify_user = {email}
+requirements = {requirements}
 rank = KFlops
 getenv = True
-initialdir = %(root)s
-executable = %(binary)s
-arguments = %(args)s
-log = %(log)s
-input = %(stdin)s
-output = %(stdout)s
-error = %(stderr)s
+initialdir = {root}
+executable = {binary}
+arguments = {args}
+log = {log}
+input = {stdin}
+output = {stdout}
+error = {stderr}
 
-Queue %(workers)s
+Queue {workers}
 '''
 
 
 def run_on_condor(binary, args, description,
                   root=None,
                   label=None,
-                  email=None,
+                  email='{}@cs.utexas.edu'.format(getpass.getuser()),
+                  group='GRAD',
+                  project='AI_ROBOTICS',
                   template=TEMPLATE,
                   condor_submit='condor_submit',
                   condor_wait='condor_wait',
                   follow='*.stderr',
                   notification='complete',
                   dry_run=False,
-                  arch='INTEL',
                   workers=1,
-                  memory=1,
                   ):
     '''Run a binary on condor.
 
     Returns a callable that will block until the condor job completes.
 
-    binary: A full or partial path to the binary.
-    args: A list of command line arguments to pass to the binary.
-    description: A short text description of the condor job.
-    root: A full or partial directory name that tells where to anchor files for
-      this job.
-    label: A string to use for condor filenames.
-    email: Email address for condor notifications. Defaults to
-      ${USER}@cs.utexas.edu.
-    template: A path to the condor job template to use, if a custom template is
-      desired.
-    condor_submit: Path to the condor_submit binary.
-    condor_wait: Path to the condor_wait binary.
-    follow: A string describing the output files to follow from the job (like
-      tail -f). The files matching this pattern (if any) will be tailed to the
-      correct output stream for this process.
-    notification: A string telling condor when to notify us about this job.
-    dry_run: If True, do not actually submit the job to condor, but do
-      everything else to the extent possible.
-    arch: Restrict the job to run on machines with this condor Arch.
-    workers: Launch this many copies of the job on condor.
-    memory: Minimum memory (in MB) required for a worker.
+    binary : str
+        A full or partial path to the binary.
+    args : list of str
+        A list of command line arguments to pass to the binary.
+    description : str
+        A short text description of the condor job.
+    root : str, optional
+        A full or partial directory name that tells where to anchor files for
+        this job. Defaults to UTCONDOR_HOME or to condor.defaults.home.
+    label : str, optional
+        A string to use for condor filenames. Defaults to a filesystem-safe
+        string containing the command-line arguments.
+    email : str, optional
+        Email address for condor notifications. Defaults to
+        ${USER}@cs.utexas.edu.
+    group : str, optional
+        Condor group to allocate this job to. Defaults to 'GRAD'.
+    project : str, optional
+        Condor project to allocate this job to. Defaults to 'AI_ROBOTICS'.
+    template : str, optional
+        A path to the condor job template to use, if a custom template is
+        desired.
+    condor_submit : str, optional
+        Path to the condor_submit binary. Defaults to $(which condor_submit).
+    condor_wait : str, optional
+        Path to the condor_wait binary. Defaults to $(which condor_wait).
+    follow : str, optional
+        A string describing the output files to follow from the job (like
+        tail -f). The files matching this pattern (if any) will be tailed to
+        the correct output stream for this process.
+    notification : str, optional
+        A string telling condor when to notify us about this job. The default is
+        'complete'; other possibilities are 'always', 'error', and 'never'.
+    dry_run : bool, optional
+        If True, do not actually submit the job to condor, but do everything
+        else to the extent possible.
+    workers : int, optional
+        Launch this many copies of the job on condor. Defaults to 1.
     '''
-    root = os.path.abspath(root or os.getcwd())
+    root = os.path.abspath(root or condor.raw.default_condor_home())
     if not os.path.exists(root):
         logging.info('%s: creating root directory', root)
         os.makedirs(root)
 
-    a = ''.join('_%s' % a for a in sorted(args))
+    a = ''.join('_{}'.format(a) for a in sorted(args))
     b = os.path.basename(binary)
-    label = re.sub(r'\W+', '-', label or '%s%s' % (b, a)).strip('-')
+    label = re.sub(r'\W+', '-', label or '{}{}'.format(b, a)).strip('-')
 
     def path(ext, proc=''):
-        return os.path.join(root, '%s%s.%s' % (label, proc, ext))
+        return os.path.join(root, '{}{}.{}'.format(label, proc, ext))
 
     # set up the config for the condor job
-    conf_path = os.path.join(root, '%s.conf' % label)
+    conf_path = os.path.join(root, '{}.conf'.format(label))
     with open(conf_path, 'w') as handle:
-        handle.write(TEMPLATE % dict(
+        handle.write(TEMPLATE.format(
                 args=' '.join(args),
                 binary=binary,
-                root=root,
                 description=description,
-                email=email or getpass.getuser() + '@cs.utexas.edu',
+                email=email,
+                group=group,
                 label=label,
                 log=path('log'),
                 notification=notification,
+                project=project,
+                requirements=condor.defaults.condor_matching,
+                root=root,
                 shell=os.getenv('SHELL'),
+                stderr=path('stderr', '$(PROCESS)'),
                 stdin=path('stdin', '$(PROCESS)'),
                 stdout=path('stdout', '$(PROCESS)'),
-                stderr=path('stderr', '$(PROCESS)'),
-                arch=arch,
                 workers=workers,
-                memory=memory,
-                ))
+        ))
     logging.debug('%s: job configuration:\n%s', conf_path, open(conf_path).read())
 
     # put any pending data from stdin into the stdin file for the job
@@ -173,7 +195,7 @@ def run_on_condor(binary, args, description,
                     break
 
     # follow any matching output files
-    for filename in glob.glob(os.path.join(root, '%s%s' % (label, follow))):
+    for filename in glob.glob(os.path.join(root, '{}{}'.format(label, follow))):
         f = threading.Thread(target=echo, args=(filename, ))
         f.daemon = True
         f.start()
@@ -187,10 +209,7 @@ def run_on_condor(binary, args, description,
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=logging.DEBUG,
-        format='%(levelname).1s %(asctime)s %(message)s')
+    condor.log.enable_default_logging()
 
     args = FLAGS.parse_args()
     if not args.cmd:
@@ -205,6 +224,8 @@ if __name__ == '__main__':
     wait = run_on_condor(args.cmd[0], args.cmd[1:],
                          args.description,
                          root=args.root,
+                         group=args.group,
+                         project=args.project,
                          label=args.label,
                          email=args.email,
                          follow=args.follow,
@@ -212,7 +233,7 @@ if __name__ == '__main__':
                          template=template,
                          dry_run=args.dry_run,
                          workers=args.workers,
-                         memory=args.memory)
+    )
 
-    if args.block:
+    if args.block or args.follow:
         wait()

@@ -228,7 +228,9 @@ def unclaimed(constraint = None):
     return int(parts[4])
 
 def default_condor_home():
-    return "workers/%s" % datetime.datetime.now().replace(microsecond = 0).isoformat()
+    return os.path.join(
+        condor.defaults.home,
+        datetime.datetime.now().replace(microsecond = 0).isoformat())
 
 def submit_condor_workers(
     workers,
