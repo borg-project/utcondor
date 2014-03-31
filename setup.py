@@ -7,7 +7,7 @@ setuptools.setup(
         "plac>=0.9.1",
         "pyzmq>=2.2.0.1",
         ],
-    scripts = [ "scripts/utcondor-run" ],
+    scripts = [ "scripts/utcondor-run", "scripts/utcondor-ipcluster" ],
     # description
     name = "utcondor",
     version = "0.4.1",
