@@ -10,7 +10,7 @@ setuptools.setup(
     scripts = [ "scripts/utcondor-run", "scripts/utcondor-ipcluster" ],
     # description
     name = "utcondor",
-    version = "0.4.1",
+    version = "0.4.2",
     author = "Bryan Silverthorn",
     author_email = "bcs@cargo-cult.org",
     description = "tools for distributed computing at UTCS",
