@@ -90,7 +90,7 @@ up. Use at your own risk.
 Credits
 -------
 
-The primary author is Bryan Silverthorn <bcs@cargo-cult.org>.
+The primary author is Bryan Silverthorn.
 
 License
 -------
